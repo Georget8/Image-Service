@@ -1,6 +1,6 @@
 module image-service
 
-go 1.21
+go 1.25
 
 require (
 	github.com/davidbyttow/govips/v2 v2.16.0
