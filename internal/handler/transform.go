@@ -218,18 +218,25 @@ func (h *Handler) isSVG(data []byte) bool {
 		return false
 	}
 
-	// Check first 500 bytes for SVG signatures
-	checkLength := 500
+	// Check first 1000 bytes for SVG signatures
+	checkLength := 1000
 	if len(data) < checkLength {
 		checkLength = len(data)
 	}
 
+	// Convert to lowercase string for case-insensitive search
 	prefix := strings.ToLower(string(data[0:checkLength]))
 
+	// Remove whitespace and newlines for better detection
+	prefix = strings.TrimSpace(prefix)
+
 	// Check for common SVG patterns
-	return strings.Contains(prefix, "<svg") ||
-		strings.Contains(prefix, "<!doctype svg") ||
-		(strings.Contains(prefix, "<?xml") && strings.Contains(prefix, "svg"))
+	return strings.HasPrefix(prefix, "<?xml") ||
+		strings.HasPrefix(prefix, "<svg") ||
+		strings.HasPrefix(prefix, "<!doctype svg") ||
+		strings.Contains(prefix, "<svg") ||
+		strings.Contains(prefix, "xmlns=\"http://www.w3.org/2000/svg\"") ||
+		strings.Contains(prefix, "xmlns='http://www.w3.org/2000/svg'")
 }
 
 func (h *Handler) generateCacheKey(imageURL string, w, ht int, fit, format string, quality int, crop string, blur int,
