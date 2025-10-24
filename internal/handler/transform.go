@@ -33,6 +33,7 @@ func NewHandler(c *cache.Cache, p *processor.Processor, maxSize int64) *Handler 
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
+				TLSHandshakeTimeout: 10 * time.Second,
 			},
 		},
 	}
@@ -140,7 +141,17 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) downloadImage(url string) ([]byte, error) {
-	resp, err := h.httpClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", url)
+
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
