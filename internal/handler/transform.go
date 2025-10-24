@@ -51,7 +51,28 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	crop := query.Get("crop")
 	blur, _ := strconv.Atoi(query.Get("blur"))
 
-	cacheKey := h.generateCacheKey(url, width, height, fit, format, quality, crop, blur)
+	// New advanced parameters
+	sharpen, _ := strconv.ParseFloat(query.Get("sharpen"), 64)
+	brightness, _ := strconv.ParseFloat(query.Get("brightness"), 64)
+	contrast, _ := strconv.ParseFloat(query.Get("contrast"), 64)
+	if contrast == 0 {
+		contrast = 1.0
+	}
+	saturation, _ := strconv.ParseFloat(query.Get("saturation"), 64)
+	if saturation == 0 {
+		saturation = 1.0
+	}
+	autoOptim := query.Get("auto") == "true" || query.Get("auto") == "1"
+	grayscale := query.Get("grayscale") == "true" || query.Get("bw") == "true"
+	flip := query.Get("flip")
+	rotate, _ := strconv.Atoi(query.Get("rotate"))
+	background := query.Get("bg")
+	strip := query.Get("strip") != "false"
+
+	cacheKey := h.generateCacheKey(
+		url, width, height, fit, format, quality, crop, blur,
+		sharpen, brightness, contrast, saturation, autoOptim, grayscale, flip, rotate, background, strip,
+	)
 
 	if cached, err := h.cache.Get(ctx, cacheKey); err == nil {
 		w.Header().Set("Content-Type", h.getContentType(format))
@@ -73,13 +94,23 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	}
 
 	opts := processor.TransformOptions{
-		Width:   width,
-		Height:  height,
-		Fit:     fit,
-		Format:  format,
-		Quality: quality,
-		Crop:    crop,
-		Blur:    blur,
+		Width:      width,
+		Height:     height,
+		Fit:        fit,
+		Format:     format,
+		Quality:    quality,
+		Crop:       crop,
+		Blur:       blur,
+		Sharpen:    sharpen,
+		Brightness: brightness,
+		Contrast:   contrast,
+		Saturation: saturation,
+		AutoOptim:  autoOptim,
+		Grayscale:  grayscale,
+		Flip:       flip,
+		Rotate:     rotate,
+		Background: background,
+		Strip:      strip,
 	}
 
 	transformed, err := h.processor.Transform(imageData, opts)
@@ -123,8 +154,11 @@ func (h *Handler) downloadImage(url string) ([]byte, error) {
 	return data, nil
 }
 
-func (h *Handler) generateCacheKey(url string, w, ht int, fit, format string, quality int, crop string, blur int) string {
-	data := fmt.Sprintf("%s:%d:%d:%s:%s:%d:%s:%d", url, w, ht, fit, format, quality, crop, blur)
+func (h *Handler) generateCacheKey(url string, w, ht int, fit, format string, quality int, crop string, blur int,
+	sharpen, brightness, contrast, saturation float64, autoOptim, grayscale bool, flip string, rotate int, bg string, strip bool) string {
+	data := fmt.Sprintf("%s:%d:%d:%s:%s:%d:%s:%d:%.2f:%.2f:%.2f:%.2f:%t:%t:%s:%d:%s:%t",
+		url, w, ht, fit, format, quality, crop, blur,
+		sharpen, brightness, contrast, saturation, autoOptim, grayscale, flip, rotate, bg, strip)
 	hashBytes := md5.Sum([]byte(data))
 	return hex.EncodeToString(hashBytes[:])
 }
