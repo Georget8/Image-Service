@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"image-service/internal/cache"
@@ -20,7 +21,6 @@ type Handler struct {
 	cache        *cache.Cache
 	processor    *processor.Processor
 	maxImageSize int64
-	httpClient   *http.Client
 }
 
 func NewHandler(c *cache.Cache, p *processor.Processor, maxSize int64) *Handler {
@@ -28,15 +28,6 @@ func NewHandler(c *cache.Cache, p *processor.Processor, maxSize int64) *Handler 
 		cache:        c,
 		processor:    p,
 		maxImageSize: maxSize,
-		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-				TLSHandshakeTimeout: 10 * time.Second,
-			},
-		},
 	}
 }
 
@@ -44,7 +35,7 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	query := r.URL.Query()
-	url := query.Get("url")
+	imageURL := query.Get("url")
 	width, _ := strconv.Atoi(query.Get("w"))
 	height, _ := strconv.Atoi(query.Get("h"))
 	fit := query.Get("fit")
@@ -62,7 +53,7 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	crop := query.Get("crop")
 	blur, _ := strconv.Atoi(query.Get("blur"))
 
-	// New advanced parameters
+	// Advanced parameters
 	sharpen, _ := strconv.ParseFloat(query.Get("sharpen"), 64)
 	brightness, _ := strconv.ParseFloat(query.Get("brightness"), 64)
 	contrast, _ := strconv.ParseFloat(query.Get("contrast"), 64)
@@ -81,19 +72,26 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	strip := query.Get("strip") != "false"
 
 	cacheKey := h.generateCacheKey(
-		url, width, height, fit, format, quality, crop, blur,
+		imageURL, width, height, fit, format, quality, crop, blur,
 		sharpen, brightness, contrast, saturation, autoOptim, grayscale, flip, rotate, background, strip,
 	)
 
+	// Check cache
 	if cached, err := h.cache.Get(ctx, cacheKey); err == nil {
-		w.Header().Set("Content-Type", h.getContentType(format))
+		contentType := h.getContentType(format)
+		// Check if cached data is SVG
+		if h.isSVG(cached) {
+			contentType = "image/svg+xml"
+		}
+		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("X-Cache", "HIT")
 		w.Header().Set("Cache-Control", "public, max-age=31536000")
 		w.Write(cached)
 		return
 	}
 
-	imageData, err := h.downloadImage(url)
+	// Download image
+	imageData, err := h.downloadImage(imageURL)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to download image: %v", err), http.StatusBadGateway)
 		return
@@ -104,6 +102,22 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if input is SVG
+	if h.isSVG(imageData) {
+		// SVG detected - return as-is (no transformations)
+		go func() {
+			bgCtx := context.Background()
+			h.cache.Set(bgCtx, cacheKey, imageData)
+		}()
+
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("X-Cache", "MISS")
+		w.Header().Set("Cache-Control", "public, max-age=31536000")
+		w.Write(imageData)
+		return
+	}
+
+	// Process non-SVG images
 	opts := processor.TransformOptions{
 		Width:      width,
 		Height:     height,
@@ -199,10 +213,29 @@ func (h *Handler) downloadImage(imageURL string) ([]byte, error) {
 	return data, nil
 }
 
-func (h *Handler) generateCacheKey(url string, w, ht int, fit, format string, quality int, crop string, blur int,
+func (h *Handler) isSVG(data []byte) bool {
+	if len(data) < 5 {
+		return false
+	}
+
+	// Check first 500 bytes for SVG signatures
+	checkLength := 500
+	if len(data) < checkLength {
+		checkLength = len(data)
+	}
+
+	prefix := strings.ToLower(string(data[0:checkLength]))
+
+	// Check for common SVG patterns
+	return strings.Contains(prefix, "<svg") ||
+		strings.Contains(prefix, "<!doctype svg") ||
+		(strings.Contains(prefix, "<?xml") && strings.Contains(prefix, "svg"))
+}
+
+func (h *Handler) generateCacheKey(imageURL string, w, ht int, fit, format string, quality int, crop string, blur int,
 	sharpen, brightness, contrast, saturation float64, autoOptim, grayscale bool, flip string, rotate int, bg string, strip bool) string {
 	data := fmt.Sprintf("%s:%d:%d:%s:%s:%d:%s:%d:%.2f:%.2f:%.2f:%.2f:%t:%t:%s:%d:%s:%t",
-		url, w, ht, fit, format, quality, crop, blur,
+		imageURL, w, ht, fit, format, quality, crop, blur,
 		sharpen, brightness, contrast, saturation, autoOptim, grayscale, flip, rotate, bg, strip)
 	hashBytes := md5.Sum([]byte(data))
 	return hex.EncodeToString(hashBytes[:])
@@ -216,6 +249,8 @@ func (h *Handler) getContentType(format string) string {
 		return "image/avif"
 	case "png":
 		return "image/png"
+	case "svg":
+		return "image/svg+xml"
 	default:
 		return "image/jpeg"
 	}
