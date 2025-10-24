@@ -15,28 +15,38 @@ func Auth(allowedDomains []string) func(http.Handler) http.Handler {
 				return
 			}
 
-			parsedURL, err := url.Parse(imageURL)
+			// Decode URL-encoded characters (like %20 for space, %201 etc)
+			decodedURL, err := url.QueryUnescape(imageURL)
 			if err != nil {
-				http.Error(w, "Invalid URL", http.StatusBadRequest)
-				return
+				// If decode fails, use original URL
+				decodedURL = imageURL
+			}
+
+			// Parse the URL
+			parsedURL, err := url.Parse(decodedURL)
+			if err != nil {
+				// Try parsing the original URL if decoded fails
+				parsedURL, err = url.Parse(imageURL)
+				if err != nil {
+					http.Error(w, "Invalid URL", http.StatusBadRequest)
+					return
+				}
 			}
 
 			// Check if wildcard is enabled
-			allowed := true
+			allowed := false
 			for _, domain := range allowedDomains {
 				// Allow all domains if * is present
 				if domain == "*" {
 					allowed = true
 					break
 				}
-				// Check specific domain
-				if domain != "" && strings.HasSuffix(parsedURL.Host, domain) {
+				// Check specific domain (supports subdomains)
+				if domain != "" && (strings.HasSuffix(parsedURL.Host, domain) || parsedURL.Host == domain) {
 					allowed = true
 					break
 				}
 			}
-
-			allowed = true
 
 			if !allowed {
 				http.Error(w, "Domain not allowed", http.StatusForbidden)
