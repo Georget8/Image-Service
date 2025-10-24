@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+*.md
+README.md
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+docker-compose.yml
+docker-compose.production.yml
+railway.json
