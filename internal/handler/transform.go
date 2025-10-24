@@ -154,6 +154,7 @@ func (h *Handler) downloadImage(imageURL string) ([]byte, error) {
 	}
 
 	// Comprehensive browser headers
+	req.Header.Set("X-Image-Service", "railway-transform-v1")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
