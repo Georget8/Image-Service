@@ -19,6 +19,7 @@ type Handler struct {
 	cache        *cache.Cache
 	processor    *processor.Processor
 	maxImageSize int64
+	httpClient   *http.Client
 }
 
 func NewHandler(c *cache.Cache, p *processor.Processor, maxSize int64) *Handler {
@@ -26,6 +27,14 @@ func NewHandler(c *cache.Cache, p *processor.Processor, maxSize int64) *Handler 
 		cache:        c,
 		processor:    p,
 		maxImageSize: maxSize,
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -131,11 +140,7 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) downloadImage(url string) ([]byte, error) {
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-	}
-
-	resp, err := client.Get(url)
+	resp, err := h.httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

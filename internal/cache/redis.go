@@ -2,8 +2,6 @@ package cache
 
 import (
 	"context"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -15,32 +13,23 @@ type Cache struct {
 }
 
 func NewCache(redisURL, password string, ttl int) (*Cache, error) {
-	// Parse Redis URL if it contains redis:// or rediss://
-	addr := redisURL
-	pass := password
-
-	if strings.HasPrefix(redisURL, "redis://") || strings.HasPrefix(redisURL, "rediss://") {
-		parsedURL, err := url.Parse(redisURL)
-		if err != nil {
-			return nil, err
-		}
-
-		// Extract host:port
-		addr = parsedURL.Host
-
-		// Extract password if present in URL
-		if parsedURL.User != nil {
-			if p, ok := parsedURL.User.Password(); ok {
-				pass = p
-			}
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		opts = &redis.Options{
+			Addr:     redisURL,
+			Password: password,
+			DB:       0,
 		}
 	}
 
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: pass,
-		DB:       0,
-	})
+	opts.PoolSize = 20
+	opts.MinIdleConns = 5
+	opts.MaxRetries = 3
+	opts.DialTimeout = 5 * time.Second
+	opts.ReadTimeout = 3 * time.Second
+	opts.WriteTimeout = 3 * time.Second
+
+	client := redis.NewClient(opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -30,9 +30,10 @@ type Processor struct{}
 
 func NewProcessor() *Processor {
 	vips.Startup(&vips.Config{
-		ConcurrencyLevel: 4,
-		MaxCacheSize:     100,
-		MaxCacheMem:      50 * 1024 * 1024, // 50MB
+		ConcurrencyLevel: 8,
+		MaxCacheSize:     200,
+		MaxCacheMem:      100 * 1024 * 1024,
+		MaxCacheFiles:    500,
 	})
 	return &Processor{}
 }
