@@ -115,7 +115,7 @@ func (p *Processor) Transform(imageData []byte, opts TransformOptions) ([]byte, 
 	// Auto-optimization: Smart sharpen + color optimization
 	if opts.AutoOptim {
 		// Mild sharpen for web display
-		if err := img.Sharpen(1.0, 1.0, 1.2); err != nil {
+		if err := img.Sharpen(1.0, 1.0, 0.8); err != nil {
 			return nil, fmt.Errorf("failed to auto-sharpen: %w", err)
 		}
 
