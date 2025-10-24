@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -140,15 +141,19 @@ func (h *Handler) Transform(w http.ResponseWriter, r *http.Request) {
 	w.Write(transformed)
 }
 
-func (h *Handler) downloadImage(url string) ([]byte, error) {
-	parsedURL, _ := url.Parse(url)
+func (h *Handler) downloadImage(imageURL string) ([]byte, error) {
+	parsedURL, err := url.Parse(imageURL)
+	if err != nil {
+		return nil, err
+	}
 	baseURL := parsedURL.Scheme + "://" + parsedURL.Host
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", imageURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	// Comprehensive browser headers
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
@@ -160,7 +165,7 @@ func (h *Handler) downloadImage(url string) ([]byte, error) {
 	req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
 	req.Header.Set("Sec-Fetch-Dest", "image")
 	req.Header.Set("Sec-Fetch-Mode", "no-cors")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("DNT", "1")
 	req.Header.Set("Connection", "keep-alive")
 
@@ -170,6 +175,7 @@ func (h *Handler) downloadImage(url string) ([]byte, error) {
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
 		},
 	}
 
